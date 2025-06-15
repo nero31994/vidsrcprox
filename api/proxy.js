@@ -13,22 +13,32 @@ export default async function handler(req, res) {
     const response = await axios.get(videoUrl);
     let html = response.data;
 
-    // Remove ad scripts and iframes
+    // === Remove ad, tracking, anti-debug scripts ===
     html = html
-      .replace(/<script[^>]*src="[^"]*(ads|pop|analytics)[^"]*"[^>]*><\/script>/gi, '')
-      .replace(/<iframe[^>]*src="[^"]*(ads|pop)[^"]*"[^>]*><\/iframe>/gi, '')
-      .replace(/<\/?script[^>]*>/gi, '');
+      .replace(/<script[^>]*src="[^"]*(ads|histats|pop|analytics|disabledevtool)[^"]*"[^>]*><\/script>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?(DisableDevtool|Histats)[\s\S]*?<\/script>/gi, '')
+      .replace(/<\/?script[^>]*>/gi, '') // remove any inline scripts (aggressive)
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // optional: remove inline styles that inject ads
+      .replace(/<iframe[^>]*src="[^"]*(ads|pop)[^"]*"[^>]*><\/iframe>/gi, '');
 
-    // Hide leftover ad containers with CSS
+    // === Optional: Inject safe CSS to hide UI junk ===
     html = html.replace('</head>', `
       <style>
-        [id*="ads"], .ad-container, .ad, .adsbygoogle { display: none !important; }
+        [id*="ads"], .ad-container, .ad, .adsbygoogle,
+        #ad720, #top_buttons_parent, .histats, .popup, .floating-ads {
+          display: none !important;
+        }
+        body {
+          user-select: text !important;
+          pointer-events: auto !important;
+        }
       </style>
     </head>`);
 
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch (error) {
-    res.status(500).send(`Failed to load video: ${error.message}`);
+    console.error('Proxy error:', error.message);
+    res.status(500).send(`Proxy error: ${error.message}`);
   }
-                  } 
+}
