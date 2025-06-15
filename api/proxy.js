@@ -1,4 +1,5 @@
 import axios from 'axios';
+import cheerio from 'cheerio';
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -11,31 +12,48 @@ export default async function handler(req, res) {
 
   try {
     const response = await axios.get(videoUrl);
-    let html = response.data;
+    const $ = cheerio.load(response.data);
 
-    html = html
-      .replace(/<script[^>]*src="[^"]*(ads|histats|analytics|disabledevtool|pop)[^"]*"[^>]*><\/script>/gi, '')
-      .replace(/<script[^>]*>[\s\S]*?(document\.write|DisableDevtool|Histats|_Hasync)[\s\S]*?<\/script>/gi, '')
-      .replace(/document\.write\(.*?<\/script>.*?\)/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    // Find the first iframe (the video player)
+    const iframe = $('iframe').first();
+    const iframeSrc = iframe.attr('src');
 
-    html = html.replace('</head>', `
-      <style>
-        [id*="ads"], .ad, .ad-container, .adsbygoogle, .popup, .floating-ads,
-        #ad720, #top_buttons_parent, .histats, .sponsor, iframe[src*="ads"] {
-          display: none !important;
-        }
-        body {
-          user-select: text !important;
-          pointer-events: auto !important;
-        }
-      </style>
-    </head>`);
+    if (!iframeSrc) {
+      return res.status(404).send('Video iframe not found');
+    }
+
+    // Clean HTML output with only the iframe embedded
+    const cleanedHtml = \`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Clean Video Player</title>
+        <style>
+          html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #000;
+          }
+          iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+          }
+        </style>
+      </head>
+      <body>
+        <iframe src="\${iframeSrc}" allowfullscreen></iframe>
+      </body>
+      </html>
+    \`;
 
     res.setHeader('Content-Type', 'text/html');
-    res.send(html);
+    res.send(cleanedHtml);
   } catch (error) {
     console.error('Proxy error:', error.message);
-    res.status(500).send(`Proxy error: ${error.message}`);
+    res.status(500).send('Proxy error: ' + error.message);
   }
 }
