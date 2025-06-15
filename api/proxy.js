@@ -1,5 +1,4 @@
 import axios from 'axios';
-import cheerio from 'cheerio';
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -12,17 +11,16 @@ export default async function handler(req, res) {
 
   try {
     const response = await axios.get(videoUrl);
-    const $ = cheerio.load(response.data);
+    const html = response.data;
 
-    // Find the first iframe (the video player)
-    const iframe = $('iframe').first();
-    const iframeSrc = iframe.attr('src');
-
-    if (!iframeSrc) {
+    // Extract the first iframe src using regex
+    const match = html.match(/<iframe[^>]+src="([^"]+)"[^>]*>/i);
+    if (!match || !match[1]) {
       return res.status(404).send('Video iframe not found');
     }
 
-    // Clean HTML output with only the iframe embedded
+    const iframeSrc = match[1];
+
     const cleanedHtml = \`
       <!DOCTYPE html>
       <html lang="en">
